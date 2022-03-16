@@ -31,4 +31,6 @@ public class TextMessage
     public int nToUserID;
     public int nChannelID;
     public String szMessage;
+    public int nIndex;
+    public int nCount;
 }

@@ -588,6 +588,8 @@ ErrorMsg ServerUser::HandleMessage(const mstrings_t& properties)
     int m = 0;
     GET_PROP_OR_RETURN(properties, TT_MSGTYPE, m);
     GET_PROP_OR_RETURN(properties, TT_MSGCONTENT, txtmsg.content);
+    GetProperty(properties, TT_TEXTMSG_INDEX, txtmsg.index);
+    GetProperty(properties, TT_TEXTMSG_COUNT, txtmsg.count);
 
     switch(m)
     {
@@ -1622,6 +1624,8 @@ void ServerUser::DoTextMessage(const ServerUser& fromuser, const TextMessage& ms
     AppendProperty(TT_MSGTYPE, msg.msgType, command);
     AppendProperty(TT_SRCUSERID, msg.from_userid, command);
     AppendProperty(TT_MSGCONTENT, msg.content, command);
+    AppendProperty(TT_TEXTMSG_INDEX, msg.index, command);
+    AppendProperty(TT_TEXTMSG_COUNT, msg.count, command);
 
     switch(msg.msgType)
     {
@@ -1650,6 +1654,8 @@ void ServerUser::DoTextMessage(const TextMessage& msg)
     AppendProperty(TT_MSGTYPE, msg.msgType, command);
     AppendProperty(TT_SRCUSERID, msg.from_userid, command);
     AppendProperty(TT_MSGCONTENT, msg.content, command);
+    AppendProperty(TT_TEXTMSG_INDEX, msg.index, command);
+    AppendProperty(TT_TEXTMSG_COUNT, msg.count, command);
 
     switch(msg.msgType)
     {

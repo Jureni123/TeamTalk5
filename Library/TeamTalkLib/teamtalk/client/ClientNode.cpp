@@ -4409,6 +4409,8 @@ int ClientNode::DoTextMessage(const TextMessage& msg)
         TTASSERT(0);
         break;
     }
+    AppendProperty(TT_TEXTMSG_INDEX, msg.index, command);
+    AppendProperty(TT_TEXTMSG_COUNT, msg.count, command);
     AppendProperty(TT_CMDID, GEN_NEXT_ID(m_cmdid_counter), command);
     command += EOL;
 
@@ -5765,6 +5767,8 @@ void ClientNode::HandleTextMessage(const mstrings_t& properties)
     GetProperty(properties, TT_SRCUSERID, msg.from_userid);
     GetProperty(properties, TT_CHANNELID, msg.channelid);
     GetProperty(properties, TT_MSGCONTENT, msg.content);
+    GetProperty(properties, TT_TEXTMSG_INDEX, msg.index);
+    GetProperty(properties, TT_TEXTMSG_COUNT, msg.count);
 
     clientuser_t user = GetUser(msg.from_userid);
     if(user.get())
