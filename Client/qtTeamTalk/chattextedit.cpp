@@ -306,20 +306,13 @@ void ChatTextEdit::limitText()
 
 bool ChatTextEdit::mergeMessages(const MyTextMessage& msg, QString& content)
 {
-    if (msg.nCount > 1)
-    {
-        m_mergemessages[generateKey(msg)].push_back(msg);
-    }
+    m_mergemessages[generateKey(msg)].push_back(msg);
 
     // prevent out-of-memory.
     if (m_mergemessages[generateKey(msg)].size() > 1000)
         m_mergemessages.remove(generateKey(msg));
 
-    if (msg.nCount == 0 || msg.nCount == 1)
-    {
-        content = _Q(msg.szMessage);
-    }
-    else if (msg.nIndex + 1 == msg.nCount)
+    if (!msg.bMore)
     {
         for (auto& m : m_mergemessages[generateKey(msg)])
         {
@@ -328,7 +321,7 @@ bool ChatTextEdit::mergeMessages(const MyTextMessage& msg, QString& content)
         m_mergemessages.remove(generateKey(msg));
     }
 
-    return msg.nCount == 0 || msg.nIndex + 1 == msg.nCount;
+    return !msg.bMore;
 }
 
 QString ChatTextEdit::currentUrl(const QTextCursor& cursor) const
