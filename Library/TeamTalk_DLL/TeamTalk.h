@@ -2370,17 +2370,9 @@ extern "C" {
         /** @brief The actual text message. The message can be
          * multi-line (include EOL).  */
         TTCHAR szMessage[TT_STRLEN];
-        /** @brief Index of text message if @c nCount is greater than 1. */
-        INT32 nIndex;
-        /** @brief Used if text message is split into several text
-         * messages.
-         *
-         * @c nCount <= 1 means there's only one text message.  @c
-         * nIndex <= @c nCount means that this is the last message.
-         * Note that the server does not use @c nIndex and @c nCount
-         * for anything. It is only used on the client side to know
-         * when a text message starts and ends. */
-        INT32 nCount;
+        /** @brief Whether this text message is to be merged with next
+         * text message. */
+        TTBOOL bMore;
     } TextMessage;
     /** @} */
 

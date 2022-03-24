@@ -1332,8 +1332,7 @@ void setTextMessage(JNIEnv* env, TextMessage& msg, jobject lpTextMessage, JConve
     jfieldID fid_toid = env->GetFieldID(cls_txtmsg, "nToUserID", "I");
     jfieldID fid_chanid = env->GetFieldID(cls_txtmsg, "nChannelID", "I");
     jfieldID fid_msg = env->GetFieldID(cls_txtmsg, "szMessage", "Ljava/lang/String;");
-    jfieldID fid_index = env->GetFieldID(cls_txtmsg, "nIndex", "I");
-    jfieldID fid_count = env->GetFieldID(cls_txtmsg, "nCount", "I");
+    jfieldID fid_more = env->GetFieldID(cls_txtmsg, "bMore", "Z");
 
 
     assert(fid_type);
@@ -1342,8 +1341,7 @@ void setTextMessage(JNIEnv* env, TextMessage& msg, jobject lpTextMessage, JConve
     assert(fid_toid);
     assert(fid_chanid);
     assert(fid_msg);
-    assert(fid_index);
-    assert(fid_count);
+    assert(fid_more);
 
     if(conv == N2J)
     {
@@ -1353,8 +1351,7 @@ void setTextMessage(JNIEnv* env, TextMessage& msg, jobject lpTextMessage, JConve
         env->SetIntField(lpTextMessage, fid_toid, msg.nToUserID);
         env->SetIntField(lpTextMessage, fid_chanid, msg.nChannelID);
         env->SetObjectField(lpTextMessage, fid_msg, NEW_JSTRING(env, msg.szMessage));
-        env->SetIntField(lpTextMessage, fid_index, msg.nIndex);
-        env->SetIntField(lpTextMessage, fid_count, msg.nCount);
+        env->SetBooleanField(lpTextMessage, fid_more, msg.bMore);
     }
     else
     {
@@ -1365,8 +1362,7 @@ void setTextMessage(JNIEnv* env, TextMessage& msg, jobject lpTextMessage, JConve
         msg.nToUserID = env->GetIntField(lpTextMessage, fid_toid);
         msg.nChannelID = env->GetIntField(lpTextMessage, fid_chanid);
         TT_STRCPY(msg.szMessage, ttstr(env, (jstring)env->GetObjectField(lpTextMessage, fid_msg)));
-        msg.nIndex = env->GetIntField(lpTextMessage, fid_index);
-        msg.nCount = env->GetIntField(lpTextMessage, fid_count);
+        msg.bMore = env->GetBooleanField(lpTextMessage, fid_more);
     }
 }
 

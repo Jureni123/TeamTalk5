@@ -163,8 +163,7 @@ namespace teamtalk {
         int to_userid = 0;
         ACE_TString content;
         int channelid = 0;
-        int index = 0;
-        int count = 0;
+        bool more = false;
     };
 
     /* Remember to updated DLL header file when modifying this */

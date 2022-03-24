@@ -1590,16 +1590,14 @@ public class TeamTalkServerTestCase extends TeamTalkTestCaseBase {
             txtmsg.nMsgType = TextMsgType.MSGTYPE_USER;
             txtmsg.nToUserID = client2.getMyUserID();
             txtmsg.szMessage = "My text message";
-            txtmsg.nIndex = i;
-            txtmsg.nCount = 57;
+            txtmsg.bMore = i < 56;
             assertTrue("send text message #" + i, waitCmdSuccess(client1, client1.doTextMessage(txtmsg), DEF_WAIT, interleave));
         }
 
         TTMessage msg = new TTMessage();
         for (int i=0;i<57;++i) {
             assertTrue("message event", waitForEvent(client2, ClientEvent.CLIENTEVENT_CMD_USER_TEXTMSG, DEF_WAIT, msg, interleave));
-            assertEquals("message received", i, msg.textmessage.nIndex);
-            assertEquals("message count", 57, msg.textmessage.nCount);
+            assertEquals("message more", i < 56, msg.textmessage.bMore);
         }
 
     }
