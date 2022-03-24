@@ -319,6 +319,8 @@ struct MyTextMessage : TextMessage
         this->nFromUserID = msg.nFromUserID;
         this->nMsgType = msg.nMsgType;
         this->nToUserID = msg.nToUserID;
+        this->nIndex = msg.nIndex;
+        this->nCount = msg.nCount;
 #if defined(Q_OS_WIN32)
         wcsncpy(this->szFromUsername, msg.szFromUsername, TT_STRLEN);
         wcsncpy(this->szMessage, msg.szMessage, TT_STRLEN);
