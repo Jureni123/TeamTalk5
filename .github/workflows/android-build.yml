@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Build (Universal JAR Search)
+name: TeamTalk5 Legacy Build (Final Desugar Fix)
 
 on: 
   workflow_dispatch:
@@ -21,9 +21,12 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # 3. Setup Android SDK MANUAL
-    - name: Install Android SDK Manually
+    # 3. Install System Tools & Android SDK
+    - name: Install Tools & Android SDK
       run: |
+        # Install zip/unzip tools yang wajib buat clean JAR
+        sudo apt-get update && sudo apt-get install -y zip unzip
+        
         export ANDROID_HOME=$HOME/android-sdk
         mkdir -p $ANDROID_HOME/cmdline-tools
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip
@@ -33,12 +36,8 @@ jobs:
         export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
         
         yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null 2>&1 || true
+        sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-29" "build-tools;29.0.3"
         
-        sdkmanager --sdk_root=$ANDROID_HOME \
-          "platform-tools" \
-          "platforms;android-29" \
-          "build-tools;29.0.3"
-          
         echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
         echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
@@ -51,37 +50,44 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
 
-    # 5. UNIVERSAL SEARCH: CARI JAR DI MANA SAJA & COPY KE TARGET
-    - name: Find & Copy TeamTalk5.jar to Target
+    # 5. AGGRESSIVE JAR CLEANING (PASTIKAN ZIP TOOL TERPASANG)
+    - name: Find, Copy & Aggressively Clean TeamTalk5.jar
       run: |
-        echo " Searching for TeamTalk5.jar in ENTIRE repository..."
-        
-        # Cari file JAR di mana saja (case-insensitive)
+        echo "🔍 Searching for TeamTalk5.jar..."
         JAR_PATH=$(find . -iname "TeamTalk5.jar" -type f | head -n 1)
         
         if [ -z "$JAR_PATH" ]; then
-          echo "❌ FATAL ERROR: TeamTalk5.jar NOT FOUND anywhere!"
-          echo "Please make sure you uploaded TeamTalk5.jar to Client/TeamTalkAndroid/libs/"
+          echo "❌ FATAL: TeamTalk5.jar NOT FOUND!"
           exit 1
-        else
-          echo "✅ FOUND TeamTalk5.jar at: $JAR_PATH"
-          
-          # Target folder yang diharapkan Gradle
-          TARGET_DIR="Client/TeamTalkAndroid/libs"
-          mkdir -p $TARGET_DIR
-          
-          # Copy ke target jika belum di sana
-          if [[ "$JAR_PATH" != *"$TARGET_DIR/TeamTalk5.jar"* ]]; then
-            echo "📦 Copying JAR to target location: $TARGET_DIR/"
-            cp "$JAR_PATH" "$TARGET_DIR/TeamTalk5.jar"
-          else
-            echo "✨ JAR already in correct location!"
-          fi
         fi
         
-        # Fix struktur folder legacy (symlink app)
+        echo "✅ Found at: $JAR_PATH"
+        
+        TARGET_DIR="Client/TeamTalkAndroid/libs"
+        mkdir -p $TARGET_DIR
+        cp "$JAR_PATH" "$TARGET_DIR/TeamTalk5.jar"
+        
+        # --- CLEANING PROCESS ---
+        FINAL_JAR="$TARGET_DIR/TeamTalk5.jar"
+        echo " Starting aggressive cleaning on: $FINAL_JAR"
+        
+        # 1. Hapus module-info.class
+        echo "   - Removing module-info.class..."
+        zip -d "$FINAL_JAR" "module-info.class" || echo "   (module-info not found, skipping)"
+        
+        # 2. Hapus seluruh folder META-INF/versions
+        echo "   - Removing META-INF/versions/*..."
+        zip -d "$FINAL_JAR" "META-INF/versions/*" || echo "   (META-INF/versions not found, skipping)"
+        
+        # 3. Hapus META-INF/module-info.class (kadang ada di sini)
+        echo "   - Removing META-INF/module-info.class..."
+        zip -d "$FINAL_JAR" "META-INF/module-info.class" || echo "   (META-INF/module-info not found, skipping)"
+        
+        echo "✨ Cleaning complete!"
+        
+        # Fix struktur folder legacy
         if [ -d "Client/TeamTalkAndroid/src/main" ] && [ ! -d "Client/TeamTalkAndroid/app" ]; then
-          echo "🔧 Creating 'app' symlink for legacy structure..."
+          echo "🔧 Creating 'app' symlink..."
           cd Client/TeamTalkAndroid
           mkdir -p app
           ln -sf ../src app/src
@@ -92,11 +98,9 @@ jobs:
           cd ../..
         fi
         
-        # Verifikasi akhir
-        echo "=== Final Check: Contents of libs folder ==="
         ls -lh Client/TeamTalkAndroid/libs/
 
-    # 6. Disable Jetifier & Create local.properties
+    # 6. Configure Environment
     - name: Configure Build Environment
       run: |
         echo "android.enableJetifier=false" >> Client/TeamTalkAndroid/gradle.properties
@@ -115,7 +119,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-UniversalSearch
+        name: TeamTalk5-Legacy-FinalDesugarFix
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
