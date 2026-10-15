@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Android Build (Nuclear Jetifier Fix)
+name: TeamTalk5 Legacy Build (Auto-Copy JAR)
 
 on: 
   workflow_dispatch:
@@ -21,11 +21,9 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # 3. Setup Android SDK MANUAL (Fixed Broken Pipe)
+    # 3. Setup Android SDK MANUAL
     - name: Install Android SDK Manually
       run: |
-        echo " Starting Manual SDK Installation..."
-        
         export ANDROID_HOME=$HOME/android-sdk
         mkdir -p $ANDROID_HOME/cmdline-tools
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip
@@ -34,88 +32,80 @@ jobs:
         
         export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
         
-        # Accept licenses DULU secara terpisah (Fixed Broken Pipe)
         yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null 2>&1 || true
         
-        echo "✅ Licenses Accepted. Installing Packages..."
-        
-        # Install Packages TANPA pipe 'yes'
         sdkmanager --sdk_root=$ANDROID_HOME \
           "platform-tools" \
           "platforms;android-29" \
           "build-tools;29.0.3"
           
-        echo "🎉 SDK Installation Complete!"
-        
-        # Set Environment Variables
         echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
         echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
         echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
 
-    # 4. SWITCH KE JAVA 11 (Wajib buat Project 2016)
+    # 4. SWITCH KE JAVA 11
     - name: Switch to JDK 11 for Legacy Compilation
       uses: actions/setup-java@v4
       with:
         java-version: '11'
         distribution: 'temurin'
 
-    # 5. PAKSA MATIKAN JETIFIER GLOBAL (Nuclear Option)
-    - name: Disable Jetifier Globally
+    # 5. COPY JAR DARI FOLDER LIBRARY KE CLIENT
+    - name: Copy TeamTalk5.jar from Library to Client
       run: |
-        # Tambahkan flag ini ke gradle.properties biar AMAN 100%
-        echo "android.enableJetifier=false" >> Client/TeamTalkAndroid/gradle.properties
-        echo "️ Jetifier DISABLED globally for this build."
-
-    # 6. Verifikasi & Fix Struktur Folder
-    - name: Check & Fix Project Structure
-      run: |
-        echo "=== Current Java Version (Harus 11.x) ==="
-        java -version 
+        echo "🔍 Checking Library/TeamTalkJNI/libs/ for TeamTalk5.jar..."
         
-        echo "=== Checking Folder Structure ==="
-        ls -R Client/TeamTalkAndroid/ || echo "⚠️ Folder Client/TeamTalkAndroid NOT FOUND!"
+        SOURCE_JAR="Library/TeamTalkJNI/libs/TeamTalk5.jar"
+        TARGET_DIR="Client/TeamTalkAndroid/libs"
         
-        # Cek Binary Files (.so / .jar)
-        echo "=== Searching for Native Binaries ==="
-        find . -name "*.so" -o -name "TeamTalk*.jar" | head -20
+        if [ -f "$SOURCE_JAR" ]; then
+          echo "✅ Found TeamTalk5.jar in Library folder!"
+          mkdir -p $TARGET_DIR
+          cp "$SOURCE_JAR" "$TARGET_DIR/TeamTalk5.jar"
+          echo " Copied to $TARGET_DIR/"
+        else
+          echo "❌ TeamTalk5.jar NOT FOUND in Library folder!"
+          echo "💡 You must download TeamTalk 5 SDK and place TeamTalk5.jar in libs/ folder manually."
+          exit 1
+        fi
         
-        # FIX: Buat symlink folder 'app' jika struktur legacy terdeteksi
+        # Fix struktur folder legacy (symlink app)
         if [ -d "Client/TeamTalkAndroid/src/main" ] && [ ! -d "Client/TeamTalkAndroid/app" ]; then
-          echo "🔧 Detected Legacy Structure. Creating 'app' symlink..."
+          echo "🔧 Creating 'app' symlink for legacy structure..."
           cd Client/TeamTalkAndroid
           mkdir -p app
-          ln -s ../src app/src 2>/dev/null || true
-          ln -s ../libs app/libs 2>/dev/null || true
+          ln -sf ../src app/src
+          ln -sf ../libs app/libs
           if [ -f "../build.gradle" ] && [ ! -f "app/build.gradle" ]; then
-             cp ../build.gradle app/build.gradle 2>/dev/null || true
+             cp ../build.gradle app/build.gradle
           fi
           cd ../..
         fi
+        
+        ls -lh Client/TeamTalkAndroid/libs/
 
-    # 7. Generate local.properties
-    - name: Create local.properties
+    # 6. Disable Jetifier & Create local.properties
+    - name: Configure Build Environment
       run: |
+        echo "android.enableJetifier=false" >> Client/TeamTalkAndroid/gradle.properties
         echo "sdk.dir=${{ env.ANDROID_HOME }}" > Client/TeamTalkAndroid/local.properties
 
-    # 8. Build APK (PAKSA CLEAN BUILD)
+    # 7. Build APK
     - name: Build Debug APK
       working-directory: ./Client/TeamTalkAndroid 
       run: |
         chmod +x gradlew
-        # Clean dulu biar gak ada cache lama
         ./gradlew clean --no-daemon
-        # Baru build
         ./gradlew assembleDebug --stacktrace --info --no-daemon
 
-    # 9. Upload Artifact
+    # 8. Upload Artifact
     - name: Upload APK Artifact
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-NuclearFix
+        name: TeamTalk5-Legacy-AutoCopyJAR
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
-          Client/TeamTalkAndroid/bin/*.apk
           Client/TeamTalkAndroid/app/build/outputs/apk/debug/*.apk
