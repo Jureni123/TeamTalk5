@@ -1,48 +1,71 @@
-name: Android
+name: Build TeamTalk Android APK
 
-on: [push]
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch: # Agar bisa dijalankan manual dari tab Actions
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - name: Android armeabi-v7a
-            maketarget: android-armeabi-v7a
-          - name: Android arm64-v8a
-            maketarget: android-arm64-v8a
-          - name: Android x86
-            maketarget: android-x86
-          - name: Android x86_64
-            maketarget: android-x64
-
-    runs-on: ubuntu-18.04
-    name: ${{ matrix.name }}
+  build-apk:
+    runs-on: ubuntu-22.04
+    
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-    - name: Refresh Ubuntu-repo
-      run: sudo apt update
-
-    - name: Install TeamTalk Library Dependencies
-      working-directory: ${{runner.workspace}}/TeamTalk5
-      run: sudo make -C Build depend-ubuntu18
-
-    - name: Build TeamTalk Library
-      working-directory: ${{runner.workspace}}/TeamTalk5/Build
-      run: |
-        make CMAKE_EXTRA="-DFEATURE_WEBRTC=OFF -DCMAKE_INSTALL_PREFIX=${{runner.workspace}}/install-${{ matrix.maketarget }}" ${{ matrix.maketarget }}
-
-    - name: Doxygen Documentation
-      working-directory: ${{runner.workspace}}/TeamTalk5/Build
-      run: make dox
-
-    - name: Run CMake Install Target
-      working-directory: ${{runner.workspace}}/TeamTalk5/Build/build-${{ matrix.maketarget }}
-      run: cmake --build . --target install
-
-    - name: Upload TeamTalk Artifact
-      uses: actions/upload-artifact@v2
+    # 1. Setup Java & Android SDK
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
       with:
-        name: teamtalksdk-${{ matrix.maketarget }}
-        path: ${{runner.workspace}}/install-${{ matrix.maketarget }}
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    # 2. Install Dependencies untuk Compile C++ Library
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo make -C TeamTalk5/Build depend-ubuntu22 || true
+        
+    # 3. Build Native Library (JNI) untuk SEMUA arsitektur sekaligus
+    - name: Build TeamTalk JNI Libraries
+      working-directory: TeamTalk5/Build
+      run: |
+        # Perintah ini akan mengompilasi arm64, armeabi, x86, x86_64 sekaligus
+        # Hasilnya otomatis masuk ke Library/TeamTalkJNI/libs/
+        make android-all
+
+    # 4. Pindahkan Library ke Project Android Studio
+    - name: Copy JNI Libraries to Android Project
+      run: |
+        # Buat folder jniLibs jika belum ada
+        mkdir -p TeamTalkAndroid/app/src/main/jniLibs
+        
+        # Salin semua .so hasil build ke folder yang benar
+        cp -r TeamTalk5/Library/TeamTalkJNI/libs/arm64-v8a TeamTalkAndroid/app/src/main/jniLibs/
+        cp -r TeamTalk5/Library/TeamTalkJNI/libs/armeabi-v7a TeamTalkAndroid/app/src/main/jniLibs/
+        cp -r TeamTalk5/Library/TeamTalkJNI/libs/x86 TeamTalkAndroid/app/src/main/jniLibs/
+        cp -r TeamTalk5/Library/TeamTalkJNI/libs/x86_64 TeamTalkAndroid/app/src/main/jniLibs/
+        
+        # Salin Java Wrapper JAR
+        mkdir -p TeamTalkAndroid/app/libs
+        cp TeamTalk5/Library/TeamTalkJNI/libs/TeamTalk5.jar TeamTalkAndroid/app/libs/ || true
+
+    # 5. Buat local.properties otomatis (PENTING karena tidak ada PC)
+    - name: Create local.properties
+      run: |
+        echo "sdk.dir=$ANDROID_HOME" > TeamTalkAndroid/local.properties
+
+    # 6. Build APK Debug
+    - name: Build Debug APK
+      working-directory: TeamTalkAndroid
+      run: ./gradlew assembleDebug --stacktrace
+
+    # 7. Upload APK sebagai Artifact
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TeamTalk-Android-Debug-APK
+        path: TeamTalkAndroid/app/build/outputs/apk/debug/*.apk
