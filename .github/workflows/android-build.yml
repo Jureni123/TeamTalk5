@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Android Build (Fixed SDK)
+name: TeamTalk5 Legacy Android Build (Stable SDK)
 
 on: 
   workflow_dispatch:
@@ -20,30 +20,14 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
 
-    # 2. Setup Android SDK MANUAL (Anti-Error)
-    - name: Setup Android SDK Manually
-      run: |
-        # Install cmdline-tools via apt (lebih stabil daripada action pihak ketiga)
-        sudo apt-get update
-        sudo apt-get install -y wget unzip
-        
-        # Download & Setup Command Line Tools
-        export ANDROID_HOME=$HOME/android-sdk
-        mkdir -p $ANDROID_HOME/cmdline-tools
-        wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip
-        unzip -q /tmp/cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
-        mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-        
-        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
-        
-        # Install komponen yang dibutuhkan (API 29 cocok buat repo 2016)
-        yes | sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-29" "build-tools;29.0.3"
-        
-        # Set environment variables biar Gradle bisa baca
-        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-        echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+    # 2. Setup Android SDK via Official Action (Anti-Banned Google)
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 29
+        build-tools: 29.0.3
+        # PENTING: Jangan request package 'tools' atau 'extras' karena sudah deprecated
+        # Action ini otomatis install cmdline-tools terbaru yang compatible
 
     # 3. Verifikasi & Fix Struktur Folder Legacy
     - name: Check & Fix Project Structure
@@ -71,7 +55,8 @@ jobs:
     # 4. Generate local.properties (Wajib agar Gradle tahu lokasi SDK)
     - name: Create local.properties
       run: |
-        echo "sdk.dir=${{ env.ANDROID_HOME }}" > Client/TeamTalkAndroid/local.properties
+        echo "sdk.dir=${ANDROID_HOME}" > Client/TeamTalkAndroid/local.properties
+        echo "ndk.dir=${ANDROID_NDK_HOME}" >> Client/TeamTalkAndroid/local.properties
 
     # 5. Build APK
     - name: Build Debug APK
@@ -85,7 +70,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-APK-Fixed
+        name: TeamTalk5-Legacy-APK-Stable
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
