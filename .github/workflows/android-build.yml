@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Build (Auto-Copy JAR)
+name: TeamTalk5 Legacy Build (Universal JAR Search)
 
 on: 
   workflow_dispatch:
@@ -51,23 +51,32 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
 
-    # 5. COPY JAR DARI FOLDER LIBRARY KE CLIENT
-    - name: Copy TeamTalk5.jar from Library to Client
+    # 5. UNIVERSAL SEARCH: CARI JAR DI MANA SAJA & COPY KE TARGET
+    - name: Find & Copy TeamTalk5.jar to Target
       run: |
-        echo "🔍 Checking Library/TeamTalkJNI/libs/ for TeamTalk5.jar..."
+        echo " Searching for TeamTalk5.jar in ENTIRE repository..."
         
-        SOURCE_JAR="Library/TeamTalkJNI/libs/TeamTalk5.jar"
-        TARGET_DIR="Client/TeamTalkAndroid/libs"
+        # Cari file JAR di mana saja (case-insensitive)
+        JAR_PATH=$(find . -iname "TeamTalk5.jar" -type f | head -n 1)
         
-        if [ -f "$SOURCE_JAR" ]; then
-          echo "✅ Found TeamTalk5.jar in Library folder!"
-          mkdir -p $TARGET_DIR
-          cp "$SOURCE_JAR" "$TARGET_DIR/TeamTalk5.jar"
-          echo " Copied to $TARGET_DIR/"
-        else
-          echo "❌ TeamTalk5.jar NOT FOUND in Library folder!"
-          echo "💡 You must download TeamTalk 5 SDK and place TeamTalk5.jar in libs/ folder manually."
+        if [ -z "$JAR_PATH" ]; then
+          echo "❌ FATAL ERROR: TeamTalk5.jar NOT FOUND anywhere!"
+          echo "Please make sure you uploaded TeamTalk5.jar to Client/TeamTalkAndroid/libs/"
           exit 1
+        else
+          echo "✅ FOUND TeamTalk5.jar at: $JAR_PATH"
+          
+          # Target folder yang diharapkan Gradle
+          TARGET_DIR="Client/TeamTalkAndroid/libs"
+          mkdir -p $TARGET_DIR
+          
+          # Copy ke target jika belum di sana
+          if [[ "$JAR_PATH" != *"$TARGET_DIR/TeamTalk5.jar"* ]]; then
+            echo "📦 Copying JAR to target location: $TARGET_DIR/"
+            cp "$JAR_PATH" "$TARGET_DIR/TeamTalk5.jar"
+          else
+            echo "✨ JAR already in correct location!"
+          fi
         fi
         
         # Fix struktur folder legacy (symlink app)
@@ -83,6 +92,8 @@ jobs:
           cd ../..
         fi
         
+        # Verifikasi akhir
+        echo "=== Final Check: Contents of libs folder ==="
         ls -lh Client/TeamTalkAndroid/libs/
 
     # 6. Disable Jetifier & Create local.properties
@@ -104,7 +115,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-AutoCopyJAR
+        name: TeamTalk5-Legacy-UniversalSearch
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
