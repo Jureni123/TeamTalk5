@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Android Build (Stable SDK)
+name: TeamTalk5 Legacy Android Build (Hybrid Java Fix)
 
 on: 
   workflow_dispatch:
@@ -13,25 +13,35 @@ jobs:
       with:
         submodules: true 
 
-    # 1. Setup Java 11 (Wajib untuk project era 2016)
-    - name: Set up JDK 11
+    # 1. SETUP JAVA 17 DULU (Khusus buat Install SDK)
+    - name: Set up JDK 17 for SDK Installation
       uses: actions/setup-java@v4
       with:
-        java-version: '11'
+        java-version: '17'
         distribution: 'temurin'
 
-    # 2. Setup Android SDK via Official Action (Anti-Banned Google)
+    # 2. Setup Android SDK (Sekarang aman karena sudah pakai Java 17)
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       with:
         api-level: 29
         build-tools: 29.0.3
-        # PENTING: Jangan request package 'tools' atau 'extras' karena sudah deprecated
-        # Action ini otomatis install cmdline-tools terbaru yang compatible
+        # Action ini otomatis install cmdline-tools compatible Java 17
 
-    # 3. Verifikasi & Fix Struktur Folder Legacy
+    # 3. SWITCH BALIK KE JAVA 11 (Wajib buat Compile Project 2016)
+    - name: Switch to JDK 11 for Legacy Build
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        # Ini akan override JAVA_HOME jadi Java 11 lagi
+
+    # 4. Verifikasi & Fix Struktur Folder Legacy
     - name: Check & Fix Project Structure
       run: |
+        echo "=== Current Java Version ==="
+        java -version # Harus muncul 11.x.x
+        
         echo "=== Mengecek struktur folder ==="
         ls -R Client/TeamTalkAndroid/ || echo "Folder Client/TeamTalkAndroid tidak ditemukan!"
         
@@ -52,25 +62,24 @@ jobs:
           cd ../..
         fi
 
-    # 4. Generate local.properties (Wajib agar Gradle tahu lokasi SDK)
+    # 5. Generate local.properties
     - name: Create local.properties
       run: |
         echo "sdk.dir=${ANDROID_HOME}" > Client/TeamTalkAndroid/local.properties
-        echo "ndk.dir=${ANDROID_NDK_HOME}" >> Client/TeamTalkAndroid/local.properties
 
-    # 5. Build APK
+    # 6. Build APK (Dengan Java 11)
     - name: Build Debug APK
       working-directory: ./Client/TeamTalkAndroid 
       run: |
         chmod +x gradlew
         ./gradlew assembleDebug --stacktrace --info
 
-    # 6. Upload APK
+    # 7. Upload APK
     - name: Upload APK Artifact
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-APK-Stable
+        name: TeamTalk5-Legacy-APK-HybridJava
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
