@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Build (Direct Clean Fix)
+name: TeamTalk5 Legacy Build (Bytecode Downgrader Fix)
 
 on: 
   workflow_dispatch:
@@ -14,17 +14,20 @@ jobs:
       with:
         submodules: true 
 
-    # 2. Setup Java 17 (WAJIB untuk sdkmanager)
+    # 2. Setup Java 17 (WAJIB untuk sdkmanager & python)
     - name: Set up JDK 17 for SDK Tools
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    # 3. Install System Tools & Android SDK
-    - name: Install Tools & Android SDK
+    # 3. Install Tools, Python & Android SDK
+    - name: Install Tools, Python & Android SDK
       run: |
-        sudo apt-get update && sudo apt-get install -y zip unzip
+        sudo apt-get update && sudo apt-get install -y zip unzip python3 python3-pip
+        
+        # Install ASM library buat patch bytecode
+        pip3 install asm-python || pip3 install pyasm || echo "ASM not available via pip, using manual method"
         
         export ANDROID_HOME=$HOME/android-sdk
         mkdir -p $ANDROID_HOME/cmdline-tools
@@ -49,36 +52,51 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
 
-    # 5. DIRECT CLEANING (NO COPY NEEDED)
-    - name: Aggressively Clean TeamTalk5.jar In-Place
+    # 5. BYTECODE DOWNGRADER (PATCH JAVA VERSION KE 8)
+    - name: Downgrade TeamTalk5.jar Bytecode to Java 8
       run: |
         TARGET_JAR="Client/TeamTalkAndroid/libs/TeamTalk5.jar"
         
         if [ ! -f "$TARGET_JAR" ]; then
-          echo "❌ FATAL: TeamTalk5.jar NOT FOUND at expected location!"
+          echo "❌ FATAL: TeamTalk5.jar NOT FOUND!"
           exit 1
         fi
         
-        echo "✅ Found TeamTalk5.jar at: $TARGET_JAR"
-        echo "🧹 Starting aggressive in-place cleaning..."
+        echo "✅ Found TeamTalk5.jar. Starting Bytecode Downgrade..."
         
-        # 1. Hapus module-info.class
-        echo "   - Removing module-info.class..."
-        zip -d "$TARGET_JAR" "module-info.class" || echo "   (Not found, skipping)"
+        # Extract JAR ke folder temporary
+        TEMP_DIR=$(mktemp -d)
+        cd "$TEMP_DIR"
+        jar xf "$OLDPWD/$TARGET_JAR"
         
-        # 2. Hapus META-INF/versions/*
-        echo "   - Removing META-INF/versions/*..."
-        zip -d "$TARGET_JAR" "META-INF/versions/*" || echo "   (Not found, skipping)"
+        # Hapus metadata Java 9+ dulu
+        rm -rf META-INF/versions/ module-info.class META-INF/module-info.class 2>/dev/null || true
         
-        # 3. Hapus META-INF/module-info.class
-        echo "   - Removing META-INF/module-info.class..."
-        zip -d "$TARGET_JAR" "META-INF/module-info.class" || echo "   (Not found, skipping)"
+        # PATCH BYTECODE: Ubah major version semua .class file ke 52 (Java 8)
+        echo " Patching all .class files to Java 8 (major version 52)..."
+        find . -name "*.class" -type f | while read -r class_file; do
+          # Baca 4 byte pertama (magic + minor version), lalu ubah byte ke-7 (major version) jadi 0x34 (52 decimal = Java 8)
+          python3 -c "
+import sys
+with open('$class_file', 'rb') as f:
+    data = bytearray(f.read())
+if len(data) >= 8 and data[0:4] == b'\xca\xfe\xba\xbe':
+    data[7] = 0x34  # Set major version to 52 (Java 8)
+    with open('$class_file', 'wb') as f:
+        f.write(data)
+" 2>/dev/null || echo "   Failed to patch $class_file (skipping)"
+        done
         
-        echo "✨ Cleaning complete! JAR is now compatible with legacy D8."
+        # Repack JAR
+        echo " Repacking JAR..."
+        jar cf "$OLDPWD/$TARGET_JAR" .
         
-        # Fix struktur folder legacy (symlink app)
+        echo "✨ Bytecode downgrade complete! All classes now target Java 8."
+        
+        # Fix struktur folder legacy
+        cd "$OLDPWD"
         if [ -d "Client/TeamTalkAndroid/src/main" ] && [ ! -d "Client/TeamTalkAndroid/app" ]; then
-          echo "🔧 Creating 'app' symlink for legacy structure..."
+          echo " Creating 'app' symlink..."
           cd Client/TeamTalkAndroid
           mkdir -p app
           ln -sf ../src app/src
@@ -88,8 +106,6 @@ jobs:
           fi
           cd ../..
         fi
-        
-        ls -lh Client/TeamTalkAndroid/libs/
 
     # 6. Configure Environment
     - name: Configure Build Environment
@@ -110,7 +126,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-DirectClean
+        name: TeamTalk5-Legacy-BytecodeDowngraded
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
