@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Android Build (Hybrid Java Fix)
+name: TeamTalk5 Legacy Android Build (Final Stable)
 
 on: 
   workflow_dispatch:
@@ -8,50 +8,75 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+    # 1. Checkout Code
     - name: Checkout Repository
       uses: actions/checkout@v4
       with:
         submodules: true 
 
-    # 1. SETUP JAVA 17 DULU (Khusus buat Install SDK)
-    - name: Set up JDK 17 for SDK Installation
+    # 2. Setup Java 17 (WAJIB untuk menjalankan sdkmanager modern)
+    - name: Set up JDK 17 for SDK Tools
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    # 2. Setup Android SDK (Sekarang aman karena sudah pakai Java 17)
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-      with:
-        api-level: 29
-        build-tools: 29.0.3
-        # Action ini otomatis install cmdline-tools compatible Java 17
+    # 3. Setup Android SDK MANUAL (Anti-Error, Tanpa Action Pihak Ketiga)
+    - name: Install Android SDK Manually
+      run: |
+        echo " Starting Manual SDK Installation..."
+        
+        # Download Command Line Tools (Versi terbaru yang stabil)
+        export ANDROID_HOME=$HOME/android-sdk
+        mkdir -p $ANDROID_HOME/cmdline-tools
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip
+        
+        # Extract & Rename agar sesuai standar Google
+        unzip -q /tmp/cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
+        mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+        
+        # Tambahkan ke PATH
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+        
+        # Accept License Otomatis & Install Komponen Dasar
+        # Kita install API 29 & Build Tools 29.0.3 sesuai kebutuhan repo 2016
+        yes | sdkmanager --sdk_root=$ANDROID_HOME \
+          "platform-tools" \
+          "platforms;android-29" \
+          "build-tools;29.0.3" \
+          --licenses > /dev/null 2>&1
+          
+        echo "✅ SDK Installation Complete!"
+        
+        # Set Environment Variables Permanen untuk Step Berikutnya
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
 
-    # 3. SWITCH BALIK KE JAVA 11 (Wajib buat Compile Project 2016)
-    - name: Switch to JDK 11 for Legacy Build
+    # 4. SWITCH KE JAVA 11 (WAJIB untuk Compile Project 2016)
+    - name: Switch to JDK 11 for Legacy Compilation
       uses: actions/setup-java@v4
       with:
         java-version: '11'
         distribution: 'temurin'
-        # Ini akan override JAVA_HOME jadi Java 11 lagi
 
-    # 4. Verifikasi & Fix Struktur Folder Legacy
+    # 5. Verifikasi & Fix Struktur Folder Legacy
     - name: Check & Fix Project Structure
       run: |
-        echo "=== Current Java Version ==="
-        java -version # Harus muncul 11.x.x
+        echo "=== Current Java Version (Harus 11.x) ==="
+        java -version 
         
-        echo "=== Mengecek struktur folder ==="
-        ls -R Client/TeamTalkAndroid/ || echo "Folder Client/TeamTalkAndroid tidak ditemukan!"
+        echo "=== Checking Folder Structure ==="
+        ls -R Client/TeamTalkAndroid/ || echo "⚠️ Folder Client/TeamTalkAndroid NOT FOUND!"
         
-        # Cek keberadaan file native (.so) dan library (.jar)
-        echo "=== Mencari file binary ==="
+        # Cek Binary Files (.so / .jar)
+        echo "=== Searching for Native Binaries ==="
         find . -name "*.so" -o -name "TeamTalk*.jar" | head -20
         
-        # FIX KRUSIAL: Repo 2016 sering tidak punya folder 'app'
+        # FIX: Buat symlink folder 'app' jika struktur legacy terdeteksi
         if [ -d "Client/TeamTalkAndroid/src/main" ] && [ ! -d "Client/TeamTalkAndroid/app" ]; then
-          echo "⚠️ Terdeteksi struktur legacy tanpa folder 'app'. Membuat symlink..."
+          echo "🔧 Detected Legacy Structure. Creating 'app' symlink..."
           cd Client/TeamTalkAndroid
           mkdir -p app
           ln -s ../src app/src 2>/dev/null || true
@@ -62,24 +87,24 @@ jobs:
           cd ../..
         fi
 
-    # 5. Generate local.properties
+    # 6. Generate local.properties
     - name: Create local.properties
       run: |
-        echo "sdk.dir=${ANDROID_HOME}" > Client/TeamTalkAndroid/local.properties
+        echo "sdk.dir=${{ env.ANDROID_HOME }}" > Client/TeamTalkAndroid/local.properties
 
-    # 6. Build APK (Dengan Java 11)
+    # 7. Build APK
     - name: Build Debug APK
       working-directory: ./Client/TeamTalkAndroid 
       run: |
         chmod +x gradlew
         ./gradlew assembleDebug --stacktrace --info
 
-    # 7. Upload APK
+    # 8. Upload Artifact
     - name: Upload APK Artifact
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-APK-HybridJava
+        name: TeamTalk5-Legacy-Final-Build
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
