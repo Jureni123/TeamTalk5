@@ -1,93 +1,60 @@
-name: Build TeamTalk Android APK
+name: TeamTalk5 Legacy Direct Build (No Native Compile)
 
-on:
-  push:
-    branches: [ master ]
-  workflow_dispatch: 
+on: [workflow_dispatch]
 
 jobs:
   build-apk:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
+      with:
+        submodules: true # Penting! Kadang library disimpan sebagai submodule git
 
-    # 1. Setup Java
-    - name: Set up JDK 17
+    # 1. Setup Java 11 (Lebih aman untuk project 2016-era)
+    - name: Set up JDK 11
       uses: actions/setup-java@v4
       with:
-        java-version: '17'
+        java-version: '11'
         distribution: 'temurin'
 
-    # 2. Install Android SDK & NDK Manual
-    - name: Setup Android SDK & NDK
-      run: |
-        sudo apt-get update && sudo apt-get install -y wget unzip
-        
-        export ANDROID_HOME=$HOME/android-sdk
-        mkdir -p $ANDROID_HOME/cmdline-tools
-        
-        wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip
-        unzip -q /tmp/cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
-        mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-        
-        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
-        
-        yes | sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653" "cmake;3.22.1"
-        
-        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653" >> $GITHUB_ENV
-        echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-        echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+    # 2. Setup Android SDK (Menggunakan action resmi biar path otomatis benar)
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 29
+        build-tools: 29.0.3
+        # Kita tidak install NDK disini karena asumsinya .so sudah pre-compiled
 
-    # 3. Install System Dependencies
-    - name: Install System Dependencies
+    # 3. Verifikasi File Binary (PENTING!)
+    - name: Check Pre-built Binaries
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake git pkg-config libssl-dev libopus-dev libspeexdsp-dev libavcodec-dev libavformat-dev libswscale-dev libavutil-dev libvpx-dev
-        # Jalankan script dependensi dari root folder (sesuai struktur repo kamu)
-        make -C Build depend-ubuntu22 || echo "Script dependensi tidak ditemukan, lanjut compile..."
-
-    # 4. Build Native Library (PERBAIKAN PATH DI SINI)
-    - name: Build TeamTalk JNI Libraries
-      working-directory: Build  # <--- DIUBAH: Langsung ke folder Build di root
-      run: |
-        export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
-        make android-all
-
-    # 5. Pindahkan Library ke Project Android
-    - name: Copy JNI Libraries to Android Project
-      run: |
-        # Pastikan folder tujuan ada
-        mkdir -p TeamTalkAndroid/app/src/main/jniLibs
-        mkdir -p TeamTalkAndroid/app/libs
+        echo "=== Mengecek keberadaan file .so dan .jar ==="
+        # Cek di berbagai lokasi umum repo lama
+        find . -name "*.so" || echo "Tidak ditemukan file .so"
+        find . -name "TeamTalk*.jar" || echo "Tidak ditemukan file .jar"
         
-        # Salin file .so
-        cp -r Library/TeamTalkJNI/libs/arm64-v8a TeamTalkAndroid/app/src/main/jniLibs/ || true
-        cp -r Library/TeamTalkJNI/libs/armeabi-v7a TeamTalkAndroid/app/src/main/jniLibs/ || true
-        cp -r Library/TeamTalkJNI/libs/x86 TeamTalkAndroid/app/src/main/jniLibs/ || true
-        cp -r Library/TeamTalkJNI/libs/x86_64 TeamTalkAndroid/app/src/main/jniLibs/ || true
-        
-        # Salin file .jar
-        cp Library/TeamTalkJNI/libs/TeamTalk5.jar TeamTalkAndroid/app/libs/ || true
+        # Tampilkan struktur folder Client
+        ls -R Client/TeamTalkAndroid/
 
-    # 6. Buat local.properties
-    - name: Create local.properties
-      run: |
-        echo "sdk.dir=$ANDROID_HOME" > TeamTalkAndroid/local.properties
-        echo "ndk.dir=$ANDROID_NDK_HOME" >> TeamTalkAndroid/local.properties
-
-    # 7. Build APK
+    # 4. Build APK Langsung (Tanpa make android-all)
     - name: Build Debug APK
-      working-directory: TeamTalkAndroid
+      working-directory: ./Client/TeamTalkAndroid 
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace
+        
+        # Jika repo 2016 strukturnya beda (misal tidak pakai folder 'app'), 
+        # Gradle mungkin butuh parameter khusus. Tapi coba default dulu.
+        ./gradlew assembleDebug --stacktrace --info
 
-    # 8. Upload APK
+    # 5. Upload APK
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk-Android-Debug-APK
-        path: TeamTalkAndroid/app/build/outputs/apk/debug/*.apk
+        name: TeamTalk5-Legacy-Direct-Build
+        # Path output Gradle lama kadang beda, kita cari semua kemungkinan
+        path: |
+          Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
+          Client/TeamTalkAndroid/build/apk/*.apk
+          Client/TeamTalkAndroid/bin/*.apk
