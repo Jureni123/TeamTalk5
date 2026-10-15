@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Android Build (No Broken Pipe)
+name: TeamTalk5 Legacy Android Build (Nuclear Jetifier Fix)
 
 on: 
   workflow_dispatch:
@@ -24,9 +24,8 @@ jobs:
     # 3. Setup Android SDK MANUAL (Fixed Broken Pipe)
     - name: Install Android SDK Manually
       run: |
-        echo "🚀 Starting Manual SDK Installation..."
+        echo " Starting Manual SDK Installation..."
         
-        # Setup Path & Download Tools
         export ANDROID_HOME=$HOME/android-sdk
         mkdir -p $ANDROID_HOME/cmdline-tools
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip
@@ -35,13 +34,12 @@ jobs:
         
         export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
         
-        # FIX BROKEN PIPE: Accept licenses DULU secara terpisah
-        # Redirect output yes ke /dev/null biar gak error pipe
+        # Accept licenses DULU secara terpisah (Fixed Broken Pipe)
         yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null 2>&1 || true
         
         echo "✅ Licenses Accepted. Installing Packages..."
         
-        # Install Packages TANPA pipe 'yes' (karena license sudah accepted)
+        # Install Packages TANPA pipe 'yes'
         sdkmanager --sdk_root=$ANDROID_HOME \
           "platform-tools" \
           "platforms;android-29" \
@@ -62,7 +60,14 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
 
-    # 5. Verifikasi & Fix Struktur Folder
+    # 5. PAKSA MATIKAN JETIFIER GLOBAL (Nuclear Option)
+    - name: Disable Jetifier Globally
+      run: |
+        # Tambahkan flag ini ke gradle.properties biar AMAN 100%
+        echo "android.enableJetifier=false" >> Client/TeamTalkAndroid/gradle.properties
+        echo "️ Jetifier DISABLED globally for this build."
+
+    # 6. Verifikasi & Fix Struktur Folder
     - name: Check & Fix Project Structure
       run: |
         echo "=== Current Java Version (Harus 11.x) ==="
@@ -88,24 +93,27 @@ jobs:
           cd ../..
         fi
 
-    # 6. Generate local.properties
+    # 7. Generate local.properties
     - name: Create local.properties
       run: |
         echo "sdk.dir=${{ env.ANDROID_HOME }}" > Client/TeamTalkAndroid/local.properties
 
-    # 7. Build APK
+    # 8. Build APK (PAKSA CLEAN BUILD)
     - name: Build Debug APK
       working-directory: ./Client/TeamTalkAndroid 
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace --info
+        # Clean dulu biar gak ada cache lama
+        ./gradlew clean --no-daemon
+        # Baru build
+        ./gradlew assembleDebug --stacktrace --info --no-daemon
 
-    # 8. Upload Artifact
+    # 9. Upload Artifact
     - name: Upload APK Artifact
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-NoPipeError
+        name: TeamTalk5-Legacy-NuclearFix
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
