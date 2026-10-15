@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Android Build (Final Stable)
+name: TeamTalk5 Legacy Android Build (No Broken Pipe)
 
 on: 
   workflow_dispatch:
@@ -14,54 +14,55 @@ jobs:
       with:
         submodules: true 
 
-    # 2. Setup Java 17 (WAJIB untuk menjalankan sdkmanager modern)
+    # 2. Setup Java 17 (WAJIB untuk sdkmanager)
     - name: Set up JDK 17 for SDK Tools
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    # 3. Setup Android SDK MANUAL (Anti-Error, Tanpa Action Pihak Ketiga)
+    # 3. Setup Android SDK MANUAL (Fixed Broken Pipe)
     - name: Install Android SDK Manually
       run: |
-        echo " Starting Manual SDK Installation..."
+        echo "🚀 Starting Manual SDK Installation..."
         
-        # Download Command Line Tools (Versi terbaru yang stabil)
+        # Setup Path & Download Tools
         export ANDROID_HOME=$HOME/android-sdk
         mkdir -p $ANDROID_HOME/cmdline-tools
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip
-        
-        # Extract & Rename agar sesuai standar Google
         unzip -q /tmp/cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
         mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
         
-        # Tambahkan ke PATH
         export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
         
-        # Accept License Otomatis & Install Komponen Dasar
-        # Kita install API 29 & Build Tools 29.0.3 sesuai kebutuhan repo 2016
-        yes | sdkmanager --sdk_root=$ANDROID_HOME \
+        # FIX BROKEN PIPE: Accept licenses DULU secara terpisah
+        # Redirect output yes ke /dev/null biar gak error pipe
+        yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null 2>&1 || true
+        
+        echo "✅ Licenses Accepted. Installing Packages..."
+        
+        # Install Packages TANPA pipe 'yes' (karena license sudah accepted)
+        sdkmanager --sdk_root=$ANDROID_HOME \
           "platform-tools" \
           "platforms;android-29" \
-          "build-tools;29.0.3" \
-          --licenses > /dev/null 2>&1
+          "build-tools;29.0.3"
           
-        echo "✅ SDK Installation Complete!"
+        echo "🎉 SDK Installation Complete!"
         
-        # Set Environment Variables Permanen untuk Step Berikutnya
+        # Set Environment Variables
         echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
         echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
         echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
 
-    # 4. SWITCH KE JAVA 11 (WAJIB untuk Compile Project 2016)
+    # 4. SWITCH KE JAVA 11 (Wajib buat Project 2016)
     - name: Switch to JDK 11 for Legacy Compilation
       uses: actions/setup-java@v4
       with:
         java-version: '11'
         distribution: 'temurin'
 
-    # 5. Verifikasi & Fix Struktur Folder Legacy
+    # 5. Verifikasi & Fix Struktur Folder
     - name: Check & Fix Project Structure
       run: |
         echo "=== Current Java Version (Harus 11.x) ==="
@@ -104,7 +105,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-Final-Build
+        name: TeamTalk5-Legacy-NoPipeError
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
