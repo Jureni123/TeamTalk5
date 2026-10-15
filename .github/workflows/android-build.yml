@@ -1,7 +1,7 @@
-name: TeamTalk5 Legacy Android Build
+name: TeamTalk5 Legacy Android Build (Fixed JDK)
 
 on: 
-  workflow_dispatch: # Hanya jalan kalau kamu klik tombol manual
+  workflow_dispatch:
 
 jobs:
   build-apk:
@@ -13,63 +13,66 @@ jobs:
       with:
         submodules: true 
 
-    # 1. Setup Java 11 (Wajib untuk project era 2016)
-    - name: Set up JDK 11
+    # 1. Setup Java 17 DULU (Wajib buat android-actions/setup-android@v3)
+    - name: Set up JDK 17 for SDK Setup
       uses: actions/setup-java@v4
       with:
-        java-version: '11'
+        java-version: '17'
         distribution: 'temurin'
 
-    # 2. Setup Android SDK
+    # 2. Setup Android SDK (Sekarang pasti jalan karena Java sudah 17)
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       with:
         api-level: 29
         build-tools: 29.0.3
 
-    # 3. Verifikasi & Fix Struktur Folder Legacy
+    # 3. Turunkan Java ke 11 untuk Build Project Legacy
+    - name: Set up JDK 11 for Legacy Build
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+
+    # 4. Verifikasi & Fix Struktur Folder Legacy
     - name: Check & Fix Project Structure
       run: |
         echo "=== Mengecek struktur folder ==="
         ls -R Client/TeamTalkAndroid/ || echo "Folder Client/TeamTalkAndroid tidak ditemukan!"
         
-        # Cek keberadaan file native (.so) dan library (.jar)
-        echo "=== Mencari file binary ==="
+        echo "=== Mencari file binary (.so / .jar) ==="
         find . -name "*.so" -o -name "TeamTalk*.jar" | head -20
         
         # FIX KRUSIAL: Repo 2016 sering tidak punya folder 'app'
-        # Gradle modern biasanya mencari source di dalam folder 'app'
         if [ -d "Client/TeamTalkAndroid/src/main" ] && [ ! -d "Client/TeamTalkAndroid/app" ]; then
-          echo "️ Terdeteksi struktur legacy tanpa folder 'app'. Membuat symlink..."
+          echo "⚠️ Terdeteksi struktur legacy tanpa folder 'app'. Membuat symlink..."
           cd Client/TeamTalkAndroid
           mkdir -p app
           ln -s ../src app/src 2>/dev/null || true
           ln -s ../libs app/libs 2>/dev/null || true
-          # Jika build.gradle ada di root project android, link juga
           if [ -f "../build.gradle" ] && [ ! -f "app/build.gradle" ]; then
              cp ../build.gradle app/build.gradle 2>/dev/null || true
           fi
           cd ../..
         fi
 
-    # 4. Generate local.properties (Wajib agar Gradle tahu lokasi SDK)
+    # 5. Generate local.properties
     - name: Create local.properties
       run: |
         echo "sdk.dir=${ANDROID_HOME}" > Client/TeamTalkAndroid/local.properties
         echo "ndk.dir=${ANDROID_NDK_HOME}" >> Client/TeamTalkAndroid/local.properties
 
-    # 5. Build APK
+    # 6. Build APK (Sekarang jalan di Java 11)
     - name: Build Debug APK
       working-directory: ./Client/TeamTalkAndroid 
       run: |
         chmod +x gradlew
-        
-        # Coba build dengan info lengkap biar kalau error kita tahu penyebabnya
+        java -version # Cek versi java saat build
         ./gradlew assembleDebug --stacktrace --info
 
-    # 6. Upload APK (Cari di semua kemungkinan path output)
+    # 7. Upload APK
     - name: Upload APK Artifact
-      if: always() # Tetap upload meskipun build gagal (untuk keperluan debug)
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: TeamTalk5-Legacy-APK
