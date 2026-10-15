@@ -1,4 +1,4 @@
-name: TeamTalk5 Legacy Build (Final Desugar Fix)
+name: TeamTalk5 Legacy Build (Direct Clean Fix)
 
 on: 
   workflow_dispatch:
@@ -24,7 +24,6 @@ jobs:
     # 3. Install System Tools & Android SDK
     - name: Install Tools & Android SDK
       run: |
-        # Install zip/unzip tools yang wajib buat clean JAR
         sudo apt-get update && sudo apt-get install -y zip unzip
         
         export ANDROID_HOME=$HOME/android-sdk
@@ -50,44 +49,36 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
 
-    # 5. AGGRESSIVE JAR CLEANING (PASTIKAN ZIP TOOL TERPASANG)
-    - name: Find, Copy & Aggressively Clean TeamTalk5.jar
+    # 5. DIRECT CLEANING (NO COPY NEEDED)
+    - name: Aggressively Clean TeamTalk5.jar In-Place
       run: |
-        echo "🔍 Searching for TeamTalk5.jar..."
-        JAR_PATH=$(find . -iname "TeamTalk5.jar" -type f | head -n 1)
+        TARGET_JAR="Client/TeamTalkAndroid/libs/TeamTalk5.jar"
         
-        if [ -z "$JAR_PATH" ]; then
-          echo "❌ FATAL: TeamTalk5.jar NOT FOUND!"
+        if [ ! -f "$TARGET_JAR" ]; then
+          echo "❌ FATAL: TeamTalk5.jar NOT FOUND at expected location!"
           exit 1
         fi
         
-        echo "✅ Found at: $JAR_PATH"
-        
-        TARGET_DIR="Client/TeamTalkAndroid/libs"
-        mkdir -p $TARGET_DIR
-        cp "$JAR_PATH" "$TARGET_DIR/TeamTalk5.jar"
-        
-        # --- CLEANING PROCESS ---
-        FINAL_JAR="$TARGET_DIR/TeamTalk5.jar"
-        echo " Starting aggressive cleaning on: $FINAL_JAR"
+        echo "✅ Found TeamTalk5.jar at: $TARGET_JAR"
+        echo "🧹 Starting aggressive in-place cleaning..."
         
         # 1. Hapus module-info.class
         echo "   - Removing module-info.class..."
-        zip -d "$FINAL_JAR" "module-info.class" || echo "   (module-info not found, skipping)"
+        zip -d "$TARGET_JAR" "module-info.class" || echo "   (Not found, skipping)"
         
-        # 2. Hapus seluruh folder META-INF/versions
+        # 2. Hapus META-INF/versions/*
         echo "   - Removing META-INF/versions/*..."
-        zip -d "$FINAL_JAR" "META-INF/versions/*" || echo "   (META-INF/versions not found, skipping)"
+        zip -d "$TARGET_JAR" "META-INF/versions/*" || echo "   (Not found, skipping)"
         
-        # 3. Hapus META-INF/module-info.class (kadang ada di sini)
+        # 3. Hapus META-INF/module-info.class
         echo "   - Removing META-INF/module-info.class..."
-        zip -d "$FINAL_JAR" "META-INF/module-info.class" || echo "   (META-INF/module-info not found, skipping)"
+        zip -d "$TARGET_JAR" "META-INF/module-info.class" || echo "   (Not found, skipping)"
         
-        echo "✨ Cleaning complete!"
+        echo "✨ Cleaning complete! JAR is now compatible with legacy D8."
         
-        # Fix struktur folder legacy
+        # Fix struktur folder legacy (symlink app)
         if [ -d "Client/TeamTalkAndroid/src/main" ] && [ ! -d "Client/TeamTalkAndroid/app" ]; then
-          echo "🔧 Creating 'app' symlink..."
+          echo "🔧 Creating 'app' symlink for legacy structure..."
           cd Client/TeamTalkAndroid
           mkdir -p app
           ln -sf ../src app/src
@@ -119,7 +110,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: TeamTalk5-Legacy-FinalDesugarFix
+        name: TeamTalk5-Legacy-DirectClean
         path: |
           Client/TeamTalkAndroid/build/outputs/apk/debug/*.apk
           Client/TeamTalkAndroid/build/apk/*.apk
